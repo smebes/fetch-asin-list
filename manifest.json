@@ -1,0 +1,29 @@
+{
+  "manifest_version": 3,
+  "name": "Wep Scraper",
+  "version": "1.0",
+  "description": "Wep kaziyici ile Amazon bilgilerini almak",
+  "icons": {
+    "128": "icon.png"
+  },
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "downloads"
+  ],
+  "host_permissions": ["https://www.amazon.com.tr/dp/*"],
+  "action": {
+    "default_icon": "icon.png",
+    "default_popup": "popup.html",
+    "default_title": "Title"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://www.amazon.com.tr/dp/*"],
+      "js": ["content.js"]
+    }
+  ],
+  "background": {
+    "service_worker": "background.js"
+  }
+}

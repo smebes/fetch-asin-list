@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>ASIN/ISBN Fetcher</title>
+    <style>
+        #headerTitle {
+            margin: 20px 0; /* Üst ve altina 20px bosluk ekler */
+            padding: 10px; /* İçten 10px bosluk ekler */
+            white-space: nowrap; /* İçeriği tek satirda tutar */
+            overflow: hidden; /* İçerik kutunun disina tasarsa gizler */
+            text-overflow: ellipsis; /* Tasan içeriği "..." ile gösterir */
+        }
+    </style>
+</head>
+<body>
+    <h1>Baslik</h1>
+    <div id="headerTitle">Baslik burada gösterilecek...</div>
+    <textarea id="asinList" rows="4" cols="20" placeholder="ASIN/ISBN listesi girin (her satira bir tane)"></textarea>
+    <button id="fetchDetails">Listeyi Al</button>
+    <script src="popup.js"></script>
+    <button id="downloadButton">Txt indir</button>
+    <button id="downloadImageButton">Resmi indir</button>
+</body>
+</html>
