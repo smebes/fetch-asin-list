@@ -121,7 +121,7 @@ function processNextItem() {
                         processNextItem();
                     } else {
                         isProcessing = false;
-                        chrome.tabs.remove(currentProcessingTabId); // İşlem durdurulduğunda sekme kapatılır
+                        chrome.tabs.remove(currentProcessingTabId);
                         currentProcessingTabId = null;
                     }
                 }
