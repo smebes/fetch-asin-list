@@ -79,27 +79,27 @@ function processNextItem() {
                             
                         }
                     });
-                    chrome.scripting.executeScript({
-                            target: {tabId: currentTab.id},
-                            function: getProductDetailsForDownload
-                        }, (injectionResults) => {
-                            if (injectionResults && injectionResults[0] && injectionResults[0].result && injectionResults[0].result !== "Title not found") {
-                            const details = injectionResults[0].result;
-                            const asin = getASINFromUrl(currentTab.url);
-                            const blob = new Blob([details], {type: 'text/plain;charset=utf-8'});
-                            const reader = new FileReader();
-                            reader.onload = function() {
-                                chrome.downloads.download({
-                                    url: reader.result,
-                                    filename: asin ? `${asin}.txt` : 'details.txt'
-                                });
-                            };
-                            reader.readAsDataURL(blob);
-                            } else {
-                            console.log('Ürün bulunamadı, indirme yapılmıyor.');
-                            }
-                        });
-                    });
+                    // chrome.scripting.executeScript({
+                    //         target: {tabId: currentTab.id},
+                    //         function: getProductDetailsForDownload
+                    //     }, (injectionResults) => {
+                    //         if (injectionResults && injectionResults[0] && injectionResults[0].result && injectionResults[0].result !== "Title not found") {
+                    //         const details = injectionResults[0].result;
+                    //         const asin = getASINFromUrl(currentTab.url);
+                    //         const blob = new Blob([details], {type: 'text/plain;charset=utf-8'});
+                    //         const reader = new FileReader();
+                    //         reader.onload = function() {
+                    //             chrome.downloads.download({
+                    //                 url: reader.result,
+                    //                 filename: asin ? `${asin}.txt` : 'details.txt'
+                    //             });
+                    //         };
+                    //         reader.readAsDataURL(blob);
+                    //         } else {
+                    //         console.log('Ürün bulunamadı, indirme yapılmıyor.');
+                    //         }
+                    //     });
+                });
                     // chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
                     //     const tab = tabs[0];
                     //     chrome.scripting.executeScript({
