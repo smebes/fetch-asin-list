@@ -178,7 +178,7 @@ function postDatabase() {
     });
 
     const pageValueSection = document.querySelector('#rpi-attribute-book_details-fiona_pages .rpi-attribute-value');
-    let pageNumberById = pageValueSection ? pageValueSection.querySelector('p span').textContent.trim() : "Page number not found";
+    let pageNumberById = pageValueSection ? pageValueSection.querySelector('p span').textContent.trim() : 0;
 
     let rankText = '';
     
