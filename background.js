@@ -62,8 +62,8 @@ function processNextItem() {
                         target: {tabId: currentTab.id},
                         function: postDatabase
                     }, (injectionResults) => {
-                        if (injectionResults && injectionResults[0] && injectionResults[0].result) {
-                            const productData = injectionResults[0].result;
+                        if (injectionResults && injectionResults[0] && injectionResults[0].result && injectionResults[0].result !== "Title not found") {
+                            const productData = injectionResults[0].result ?? {asin:asin};
 
                             fetch('http://127.0.0.1:5000/add-product', {
                                 method: 'POST',
@@ -75,47 +75,41 @@ function processNextItem() {
                             .then(response => response.json())
                             .then(data => console.log('Ürün başarıyla eklendi:', data))
                             .catch((error) => console.error('Hata:', error));
+                        } else {
+                                fetch('http://127.0.0.1:5000/add-product', {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                },
+                                body: JSON.stringify({asin:asin}),
+                            })
+                            .then(response => response.json())
+                            .then(data => console.log('Ürün başarıyla eklendi:', data))
+                            .catch((error) => console.error('Hata:', error));
 
-                            
-                        }
+                            }
+                        });
+                        chrome.scripting.executeScript({
+                                target: {tabId: currentTab.id},
+                                function: getProductDetailsForDownload
+                            }, (injectionResults) => {
+                                if (injectionResults && injectionResults[0] && injectionResults[0].result && injectionResults[0].result !== "Title not found") {
+                                const details = injectionResults[0].result;
+                                const asin = getASINFromUrl(currentTab.url);
+                                const blob = new Blob([details], {type: 'text/plain;charset=utf-8'});
+                                const reader = new FileReader();
+                                reader.onload = function() {
+                                    chrome.downloads.download({
+                                        url: reader.result,
+                                        filename: asin ? `${asin}.txt` : 'details.txt'
+                                    });
+                                };
+                                reader.readAsDataURL(blob);
+                                } else {
+                                console.log('Ürün bulunamadı, indirme yapılmıyor.');
+                                }
+                            });
                     });
-                    // chrome.scripting.executeScript({
-                    //         target: {tabId: currentTab.id},
-                    //         function: getProductDetailsForDownload
-                    //     }, (injectionResults) => {
-                    //         if (injectionResults && injectionResults[0] && injectionResults[0].result && injectionResults[0].result !== "Title not found") {
-                    //         const details = injectionResults[0].result;
-                    //         const asin = getASINFromUrl(currentTab.url);
-                    //         const blob = new Blob([details], {type: 'text/plain;charset=utf-8'});
-                    //         const reader = new FileReader();
-                    //         reader.onload = function() {
-                    //             chrome.downloads.download({
-                    //                 url: reader.result,
-                    //                 filename: asin ? `${asin}.txt` : 'details.txt'
-                    //             });
-                    //         };
-                    //         reader.readAsDataURL(blob);
-                    //         } else {
-                    //         console.log('Ürün bulunamadı, indirme yapılmıyor.');
-                    //         }
-                    //     });
-                });
-                    // chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
-                    //     const tab = tabs[0];
-                    //     chrome.scripting.executeScript({
-                    //         target: {tabId: tab.id},
-                    //         function: getImageUrlForDownload
-                    //     }, (injectionResults) => {
-                    //         const asin = getASINFromUrl(tab.url);
-                    //         for (const frameResult of injectionResults)
-                    //             if (frameResult.result) {
-                    //                 chrome.downloads.download({
-                    //                     url: frameResult.result,
-                    //                     filename: asin ? `${asin}.jpg` : 'downloaded-image.jpg'
-                    //                 });
-                    //             }
-                    //     });
-                    // });  
                     
 
                     chrome.tabs.onUpdated.removeListener(updated);
@@ -132,23 +126,10 @@ function processNextItem() {
     });
 }
 
-// function postDatabase() {
-//     let details = '';
-//     document.querySelectorAll('#detailBullets_feature_div .a-list-item, #productOverview_feature_div .a-list-item').forEach(item => {
-//         const textContent = item.textContent.trim();
-//         if (textContent) {
-//             details += `${textContent.replace(/\s+/g, ' ')}\n`; 
-//         }
-//     });
-//     return {
-//         name: document.getElementById('productTitle') ? document.getElementById('productTitle').textContent.trim() : "Title not found",
-//         description: details,
-//         price: "99.99"
-//     };
-// }
 
 
 function postDatabase() {
+ 
     const listItems = document.querySelectorAll('#detailBullets_feature_div .a-list-item');
     let publisherInfo = '';
     let publisherName = '';
@@ -306,7 +287,7 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
     if (request.action === "fetchDetails") {
         isStopped = false; 
         const startASIN = request.asinList[0];
-        const count = 100; 
+        const count = 10000000; 
         const nextASINs = generateNextASINs(startASIN, count);
         console.log(nextASINs);
         processingQueue = nextASINs;
