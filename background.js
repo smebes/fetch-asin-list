@@ -150,6 +150,9 @@ function postDatabase() {
     let pageNumber = 0
     let customerRating = '';
     let numberOfReviews = 0;
+    let rankText = '';
+    let rankNumber = '';
+    let categories = [];
 
     listItems.forEach(item => {
         if (item.textContent.includes('Publisher')) {
@@ -192,15 +195,13 @@ function postDatabase() {
         } 
     });
 
+    const rankMatch = rankText.match(/#(\d+,\d+|\d+) in Books/);
+    rankNumber = rankMatch ? rankMatch[1].replace(',', '') : '';
     
-    // let rankText = '';
-    
-    // let categories = [];
-    
+
     // document.querySelectorAll('#detailBullets_feature_div .a-list-item').forEach(item => {
     //     if (item.textContent.includes('Best Sellers Rank')) {
     //         rankText = item.textContent.trim();
-
     //         const ulElement = item.querySelector('ul'); 
     //         if (ulElement) {
     //             ulElement.querySelectorAll('li').forEach(li => {
@@ -210,9 +211,6 @@ function postDatabase() {
     //         }
     //     }
     // });
-    // const rankMatch = rankText.match(/#(\d+,\d+|\d+) in Books/);
-    // let rankNumber = rankMatch ? rankMatch[1].replace(',', '') : 'Rank information not found';
-
     // let category1 = categories.length > 0 ? categories[0].substring(0, 250) : 'Category not found';
     // let category2 = categories.length > 1 ? categories[1].substring(0, 250) : 'Category not found';
     // let category3 = categories.length > 2 ? categories[2].substring(0, 250) : 'Category not found';
@@ -258,7 +256,7 @@ function postDatabase() {
         language: language,
         customerRating:customerRating,
         numberOfReviews:numberOfReviews,
-        // rankNumber: rankNumber,
+        rankNumber: rankNumber,
         // category1: category1,
         // category2: category2,
         // category3: category3,
