@@ -62,9 +62,8 @@ function processNextItem() {
                         target: {tabId: currentTab.id},
                         function: postDatabase
                     }, (injectionResults) => {
-                        if (injectionResults && injectionResults[0] && injectionResults[0].result && injectionResults[0].result !== "Title not found") {
-                            const productData = injectionResults[0].result ?? {asin:asin};
-
+                        if (injectionResults && injectionResults[0] && injectionResults[0].result) {
+                            const productData = injectionResults[0].result ;
                             fetch('http://127.0.0.1:5000/add-product', {
                                 method: 'POST',
                                 headers: {
@@ -76,7 +75,10 @@ function processNextItem() {
                             .then(data => console.log('Ürün başarıyla eklendi:', data))
                             .catch((error) => console.error('Hata:', error));
                         } else {
-                                fetch('http://127.0.0.1:5000/add-product', {
+                            const productData = injectionResults[0].result ;
+                           
+                           
+                            fetch('http://127.0.0.1:5000/add-product', {
                                 method: 'POST',
                                 headers: {
                                     'Content-Type': 'application/json',
@@ -93,7 +95,7 @@ function processNextItem() {
                         //         target: {tabId: currentTab.id},
                         //         function: getProductDetailsForDownload
                         //     }, (injectionResults) => {
-                        //         if (injectionResults && injectionResults[0] && injectionResults[0].result && injectionResults[0].result !== "Title not found") {
+                        //         if (injectionResults && injectionResults[0] && injectionResults[0].result ) {
                         //         const details = injectionResults[0].result;
                         //         const asin = getASINFromUrl(currentTab.url);
                         //         const blob = new Blob([details], {type: 'text/plain;charset=utf-8'});
@@ -101,7 +103,7 @@ function processNextItem() {
                         //         reader.onload = function() {
                         //             chrome.downloads.download({
                         //                 url: reader.result,
-                        //                 filename: asin ? `${asin}.txt` : 'details.txt'
+                        //                 filename: asin ? `${asin}----.txt` : 'details.txt'
                         //             });
                         //         };
                         //         reader.readAsDataURL(blob);
@@ -142,106 +144,127 @@ function postDatabase() {
     let Dimensions = ''
     let edition = ''
     let LexileMeasure = ''
+    let GradeLevel = ''
+    let Author = ''
+    let Description = ''
+    let pageNumber = 0
+    let customerRating = '';
+    let numberOfReviews = 0;
 
     listItems.forEach(item => {
         if (item.textContent.includes('Publisher')) {
-            publisherInfo = item.textContent.split(':')[1].trim().replace(/\s\s+/g, ' ');
+            publisherInfo = item.textContent.split(':')[1].trim().replace(/\s\s+/g, ' ').replace(/^\W+|\W+$/g, '');
             if (publisherInfo.includes(';')) {
                 const parts = publisherInfo.split(';');
-                publisherName = parts[0].trim();
+                publisherName = parts[0].trim()?parts[0].trim():'';
                 newData = parts[1].trim();
                 let publisher = newData.split('(');
-                edition = publisher ? publisher[0] : '----'; 
-                publishDate = publisher ? publisher[1] .replace(")", ''): "Publish date not found";
+                edition = publisher ? publisher[0] : ''; 
+                publishDate = publisher ? publisher[1] .replace(")", ''): "";
             } else {
                 let publisher = publisherInfo.split('(');
-                publisherName = publisher ? publisher[0] : "Publisher information not found";
-                publishDate = publisher ? publisher[1] .replace(")", ''): "Publish date not found";
+                publisherName = publisher ? publisher[0] : "";
+                publishDate = publisher ? publisher[1] .replace(")", ''): "";
             }
+
+            
+
         } else if (item.textContent.includes('ASIN')) {
-            asin = item.textContent.split(':')[1].trim().replace(/\s\s+/g, ' ');
+            asin = item.textContent.split(':')[1].trim().replace(/\s/g, '');
         } else if (item.textContent.includes('ISBN-13')) {
-            ISBN13 = item.textContent.split(':')[1].trim().replace(/\s\s+/g, ' ');
+            ISBN13 = item.textContent.split(':')[1].trim().replace(/\s/g, '');
         } else if (item.textContent.includes('ISBN-10')) {
-            ISBN10 = item.textContent.split(':')[1].trim().replace(/\s\s+/g, ' ');
+            ISBN10 = item.textContent.split(':')[1].trim().replace(/\s\s+/g, ' ').replace(/^\W+|\W+$/g, '');
         } else if (item.textContent.includes('Language')) {
-            language = item.textContent.split(':')[1].trim().replace(/\s\s+/g, ' ');
+            language = item.textContent.split(':')[1].trim().replace(/\s\s+/g, ' ').replace(/^\W+|\W+$/g, '');
         } else if (item.textContent.includes('Item Weight')) {
-            Weight = item.textContent.split(':')[1].trim().replace(/\s\s+/g, ' ');
+            Weight = item.textContent.split(':')[1].trim().replace(/\s\s+/g, ' ').replace(/^\W+|\W+$/g, '');
         } else if (item.textContent.includes('Dimensions')) {
-            Dimensions = item.textContent.split(':')[1].trim().replace(/\s\s+/g, ' ');
+            Dimensions = item.textContent.split(':')[1].trim().replace(/\s\s+/g, ' ').replace(/^\W+|\W+$/g, '');
+        } else if (item.textContent.includes('Paperback')) {
+            pageNumber = item.textContent.split(':')[1].trim().replace(" pages", '').replace(/\s\s+/g, ' ').replace(/^\W+|\W+$/g, '');
+        } else if (item.textContent.includes('Hardcover')) {
+            pageNumber = item.textContent.split(':')[1].trim().replace(" pages", ' ').replace(/\s\s+/g, ' ').replace(/^\W+|\W+$/g, '');
         } else if (item.textContent.includes('Lexile measure')) {
-            LexileMeasure = item.textContent.split(':')[1].trim().replace(/\s\s+/g, ' ');
-        } else if (item.textContent.includes('Grade level')) {
-            GradeLevel = item.textContent.split(':')[1].trim().replace(/\s\s+/g, ' ');
+            LexileMeasure = item.textContent.split(':')[1].trim().replace(/\s\s+/g, ' ').replace(/^\W+|\W+$/g, '');
+        // } else if (item.textContent.includes('Grade level')) {
+        //     GradeLevel = item.textContent.split(':')[1].trim().replace(/\s\s+/g, ' ').replace(/^\W+|\W+$/g, '');
         } 
     });
 
-    const pageValueSection = document.querySelector('#rpi-attribute-book_details-fiona_pages .rpi-attribute-value');
-    let pageNumberById = pageValueSection ? pageValueSection.querySelector('p span').textContent.trim() : 0;
-
-    let rankText = '';
     
-    let categories = [];
+    // let rankText = '';
     
-    document.querySelectorAll('#detailBullets_feature_div .a-list-item').forEach(item => {
-        if (item.textContent.includes('Best Sellers Rank')) {
-            rankText = item.textContent.trim();
+    // let categories = [];
+    
+    // document.querySelectorAll('#detailBullets_feature_div .a-list-item').forEach(item => {
+    //     if (item.textContent.includes('Best Sellers Rank')) {
+    //         rankText = item.textContent.trim();
 
-            const ulElement = item.querySelector('ul'); 
-            if (ulElement) {
-                ulElement.querySelectorAll('li').forEach(li => {
-                    const categoryText = li.textContent.trim();
-                    categories.push(categoryText);
-                });
-            }
-        }
-    });
-    const rankMatch = rankText.match(/#(\d+,\d+|\d+) in Books/);
-    let rankNumber = rankMatch ? rankMatch[1].replace(',', '') : 'Rank information not found';
+    //         const ulElement = item.querySelector('ul'); 
+    //         if (ulElement) {
+    //             ulElement.querySelectorAll('li').forEach(li => {
+    //                 const categoryText = li.textContent.trim();
+    //                 categories.push(categoryText);
+    //             });
+    //         }
+    //     }
+    // });
+    // const rankMatch = rankText.match(/#(\d+,\d+|\d+) in Books/);
+    // let rankNumber = rankMatch ? rankMatch[1].replace(',', '') : 'Rank information not found';
 
-    let category1 = categories.length > 0 ? categories[0].substring(0, 250) : 'Category not found';
-    let category2 = categories.length > 1 ? categories[1].substring(0, 250) : 'Category not found';
-    let category3 = categories.length > 2 ? categories[2].substring(0, 250) : 'Category not found';
+    // let category1 = categories.length > 0 ? categories[0].substring(0, 250) : 'Category not found';
+    // let category2 = categories.length > 1 ? categories[1].substring(0, 250) : 'Category not found';
+    // let category3 = categories.length > 2 ? categories[2].substring(0, 250) : 'Category not found';
 
 
-    let customerRating = '';
     const ratingElement = document.querySelector('#averageCustomerReviews .a-icon-alt');
     if (ratingElement) {
         customerRating = ratingElement.textContent.trim().split(' ')[0]; // "4.8 out of 5 stars" metninden sadece "4.8" kısmını alır
     }
 
-    let numberOfReviews = 0;
     const reviewsElement = document.getElementById('acrCustomerReviewText');
     if (reviewsElement) {
         numberOfReviews = reviewsElement.textContent.trim().split(' ')[0].replace(',', ''); // "11,717 ratings" metninden sadece "11,717" kısmını alır ve virgülü siler
     }
 
+    var bylineInfo = document.getElementById('bylineInfo');
+    if (bylineInfo) {
+      var authorLink = bylineInfo.querySelector('a');
+      if (authorLink) {
+        Author = authorLink.textContent.trim(); 
+      }
+    }
+
+    var expanderContent = document.querySelector('[data-a-expander-name="book_description_expander"] .a-expander-content');
+    if (expanderContent) {
+        Description = expanderContent.textContent.trim();
+    }
     
     return {
         asin: asin,
-        title: document.getElementById('productTitle') ? document.getElementById('productTitle').textContent.trim() : "",
-        author: 'a',
+        title: `${document.getElementById('productTitle') ? document.getElementById('productTitle').textContent.trim() : ""}`,
+        author: Author,
         publisher: publisherName,
         isbn10: ISBN10,
         isbn13: ISBN13,
-        description:'description',
-        binding: document.getElementById('productSubtitle') ? document.getElementById('productSubtitle').textContent.trim().split('–')[0] : "", 
+        description: Description,
+        binding: `${document.getElementById('productSubtitle') ? document.getElementById('productSubtitle').textContent.trim().replace('%20%20', '').split('–')[0] : ""}`,
         edition: edition,
-        numberOfPages: pageNumberById,
+        numberOfPages: pageNumber,
         dimensions: Dimensions,
         weight: Weight,
         publishDate: publishDate,
         language: language,
         customerRating:customerRating,
         numberOfReviews:numberOfReviews,
-        rankNumber: rankNumber,
-        category1: category1,
-        category2: category2,
-        category3: category3,
+        // rankNumber: rankNumber,
+        // category1: category1,
+        // category2: category2,
+        // category3: category3,
         lexileLevel:LexileMeasure,
         image: document.getElementById('landingImage').getAttribute('src'),
-        price:'10'
+        // price:'10'
     };
 }
 
