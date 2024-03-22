@@ -238,7 +238,9 @@ function postDatabase() {
     if (expanderContent) {
         Description = expanderContent.textContent.trim();
     }
-    
+
+    var category = document.querySelector('#nav-subnav a').textContent.trim().replace(/\s\s+/g, ' ').replace(/^\W+|\W+$/g, '');
+
     return {
         asin: asin,
         title: `${document.getElementById('productTitle') ? document.getElementById('productTitle').textContent.trim() : ""}`,
@@ -257,9 +259,7 @@ function postDatabase() {
         customerRating:customerRating,
         numberOfReviews:numberOfReviews,
         rankNumber: rankNumber,
-        // category1: category1,
-        // category2: category2,
-        // category3: category3,
+        category1: category,
         lexileLevel:LexileMeasure,
         image: document.getElementById('landingImage').getAttribute('src'),
         // price:'10'
