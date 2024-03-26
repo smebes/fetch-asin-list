@@ -11,9 +11,15 @@
     "activeTab",
     "scripting",
     "downloads",
-    "storage"
+    "storage",
+    "webNavigation",
+    "*://*.amazon.com/*"
   ],
-  "host_permissions": ["https://www.amazon.com.tr/dp/*"],
+  "host_permissions": [
+    "https://www.amazon.com/dp/*",
+    "https://www.amazon.com/*",
+    "*://*.amazon.com/*"
+  ],
   "action": {
     "default_icon": "icon.png",
     "default_popup": "popup.html",
@@ -21,7 +27,7 @@
   },
   "content_scripts": [
     {
-      "matches": ["https://www.amazon.com.tr/dp/*"],
+      "matches": ["https://www.amazon.com/dp/*"],
       "js": ["content.js"]
     }
   ],
