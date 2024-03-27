@@ -13,12 +13,12 @@
     "downloads",
     "storage",
     "webNavigation",
-    "*://*.amazon.com/*"
+    "*://*.amazon.de/*"
   ],
   "host_permissions": [
-    "https://www.amazon.com/dp/*",
-    "https://www.amazon.com/*",
-    "*://*.amazon.com/*"
+    "https://www.amazon.de/dp/*",
+    "https://www.amazon.de/*",
+    "*://*.amazon.de/*"
   ],
   "action": {
     "default_icon": "icon.png",
@@ -27,7 +27,7 @@
   },
   "content_scripts": [
     {
-      "matches": ["https://www.amazon.com/dp/*"],
+      "matches": ["https://www.amazon.de/dp/*"],
       "js": ["content.js"]
     }
   ],

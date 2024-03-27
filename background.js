@@ -1,103 +1,80 @@
-
 let isStopped = false;
 let asinList = [];
 let currentProcessingTabs = {};
 let maxConcurrentTabs = 25;
-let repeatCount = 0; 
-const repeatLimit = 10; 
-let lastASIN = 'B09GZJPZ6D';
-let openTabIds = []; 
-let tabStates = {}; 
-
+let repeatCount = 0;
+const repeatLimit = 4; 
+let openTabIds = [];
+let tabStates = {};
+const flaskAppUrl = 'http://127.0.0.1:8080';
 
 chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
     if (request.action === "stop") {
         isStopped = true;
-        openTabIds.forEach(tabId => {
-            chrome.tabs.remove(tabId);
-        });
+        openTabIds.forEach(tabId => chrome.tabs.remove(tabId));
         openTabIds = [];
     } else if (request.action === "fetchDetails" && !isStopped) {
-        repeatCount = 0;
-        asinList = generateNextASINs(lastASIN, maxConcurrentTabs);
-        openInitialTabs();
-        setTimeout(() => { 
-            updateTabsWithASINs();
-        }, 1000); 
+        repeatCount = 0; // Döngü sayacını sıfırla
+        fetchIsbnListAndContinue();
     }
 });
 
+function fetchIsbnListAndContinue() {
+    if (repeatCount < repeatLimit) {
+        fetch(`${flaskAppUrl}/get-isbn10-list?start=${repeatCount * maxConcurrentTabs}`)
+            .then(response => response.json())
+            .then(data => {
+                asinList = data; // Yeni ISBN listesi
+                if (repeatCount === 0) { // İlk döngüde sekmeleri aç
+                    openInitialTabs();
+                } else {
+                    updateTabsWithIsbn(); // İkinci döngüden itibaren mevcut sekmeleri güncelle
+                }
+                repeatCount++; // Döngü sayacını artır
+            })
+            .catch(error => console.error('Error fetching ISBN list:', error));
+    }
+}
 
 function openInitialTabs() {
-    if (openTabIds.length < maxConcurrentTabs) {
-        for (let i = 0; i < maxConcurrentTabs; i++) {
-            chrome.tabs.create({ url: 'about:blank' }, function(tab) {
-                openTabIds.push(tab.id);
-                tabStates[tab.id] = 'readyForNext'; 
-            });
-        }
-    }
-}
-
-function updateTabsWithASINs() {
-
-    if (asinList.length === 0 && repeatCount < repeatLimit) {
-        lastASIN = generateNextASINs(lastASIN, maxConcurrentTabs)[maxConcurrentTabs-1];
-        asinList = generateNextASINs(lastASIN, maxConcurrentTabs);
-        repeatCount++;
-    }
-
-    if (asinList.length > 0) {
-        let updatesCount = 0;
-        openTabIds.forEach((tabId, index) => {
-            
-            if (asinList.length > 0 ) {
-                let asin = asinList.shift();
-                chrome.tabs.update(tabId, { url: `https://www.amazon.com/dp/${asin}` }, () => {
-                    updatesCount++;
-                    tabStates[tabId] = 'loading';
-                    if (updatesCount === maxConcurrentTabs || index === openTabIds.length - 1) {
-                        if (asinList.length > 0 || repeatCount < repeatLimit) {
-                            setTimeout(updateTabsWithASINs, 3000);
-                        } else {
-                            console.log("Tüm işlemler tamamlandı.");
-                        }
-                    }
-                });
+    for (let i = 0; i < maxConcurrentTabs; i++) {
+        chrome.tabs.create({ url: 'about:blank' }, function(tab) {
+            openTabIds.push(tab.id);
+            currentProcessingTabs[tab.id] = { status: 'readyForNext' };
+            if (openTabIds.length === maxConcurrentTabs) {
+                updateTabsWithIsbn();
             }
         });
-    } else {
-        console.log("İşlem limitine ulaşıldı veya daha fazla ASIN yok.");
     }
 }
 
+function updateTabsWithIsbn() {
+    openTabIds.forEach((tabId, index) => {
+        if (asinList.length > index) {
+            let isbn = asinList[index];
+            let amazonUrl = `https://www.amazon.de/dp/${isbn}`;
+            chrome.tabs.update(tabId, { url: amazonUrl }, () => {
+                currentProcessingTabs[tabId].status = 'loading';
+            });
+        }
+    });
 
-function initializeProcessing() {
-    if (repeatCount >= repeatLimit) {
-        console.log("İşlem limitine ulaşıldı.");
-        return; 
-    }
-    if (asinList.length === 0) {
-        lastASIN = generateNextASINs(lastASIN, maxConcurrentTabs)[maxConcurrentTabs-1]; 
-        asinList = generateNextASINs(lastASIN, maxConcurrentTabs);
-        repeatCount++;
-        updateTabsWithASINs(); 
-    }
-    while (Object.keys(currentProcessingTabs).length < maxConcurrentTabs && asinList.length > 0) {
-        processNextItem();
-    }
+    // Tüm sekmeler güncellendikten sonra bir sonraki liste için fetchIsbnListAndContinue çağrısı yapılmalı.
+    // Bu işlem, onUpdated dinleyicisi içinde bir sekme güncellendiğinde ve 'readyForNext' durumuna geçtiğinde tetiklenir.
 }
+
+
 
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
-    if (tabStates[tabId] === 'loading') {
-        tabStates[tabId] === 'waiting'
+    if (changeInfo.status === 'complete' && currentProcessingTabs[tabId] && currentProcessingTabs[tabId].status === 'loading') {
+        currentProcessingTabs[tabId].status = 'readyForNext';
         chrome.scripting.executeScript({
             target: {tabId: tabId},
             function: postDatabase
         }, (injectionResults) => {
             if (injectionResults && injectionResults[0] && injectionResults[0].result) {
                 const productData = injectionResults[0].result ;
-                fetch('http://127.0.0.1:8080/add-product', {
+                fetch('http://127.0.0.1:8080/update-product', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -112,56 +89,30 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
                 if (asinMatch && asinMatch.length > 1) {
                     const asin = asinMatch[1];
                     console.log('Bulunan ASIN:', asin);
-                    fetch('http://127.0.0.1:8080/add-product', {
+                    fetch('http://127.0.0.1:8080/update-product', {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
                         },
-                        body: JSON.stringify({ asin: asin })
+                        body: JSON.stringify({ category: '1' })
                     })
                     .then(response => response.json())
                     .then(data => console.log('Ürün başarıyla eklendi:', data))
                     .catch(error => console.error('Hata:', error));
                 }      
             }
-        });
-        tabStates[tabId] = 'readyForNext';
+        });    
+        let allTabsReady = openTabIds.every(id => currentProcessingTabs[id].status === 'readyForNext');
+        if (allTabsReady && repeatCount < repeatLimit) {
+            fetchIsbnListAndContinue();
+        }
     }
 });
 
 
-
-function generateNextASINs(startASIN, count) {
-    const order = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-    function incrementChar(c) {
-        const index = order.indexOf(c);
-        return index === order.length - 1 ? '0' : order[index + 1];
-    }
-
-    function incrementASIN(asin) {
-        let asinArray = asin.split('');
-        for (let i = asinArray.length - 1; i >= 0; i--) {
-            if (asinArray[i] !== 'Z') {
-                asinArray[i] = incrementChar(asinArray[i]);
-                break;
-            } else {
-                asinArray[i] = '0';
-                if (i === 0) {
-                    asinArray.unshift('A');
-                }
-            }
-        }
-        return asinArray.join('');
-    }
-
-    let nextASINs = [startASIN];
-    for (let i = 0; i < count; i++) {
-        nextASINs.push(incrementASIN(nextASINs[nextASINs.length - 1]));
-    }
-    return nextASINs.slice(1);
-}
-
-
+// function postDatabase() {
+//   return {isbn10: "0007425724", title: "Test Kitabı123123", author: "Yazar123123123"};
+// }
 
 function postDatabase() {
     const listItems = document.querySelectorAll('#detailBullets_feature_div .a-list-item');
@@ -183,7 +134,7 @@ function postDatabase() {
     let customerRating = '';
     let numberOfReviews = 0;
     let rankText = '';
-    let rankNumber = '';
+    let rankNumber = 0;
 
     listItems.forEach(item => {
         if (item.textContent.includes('Publisher')) {
@@ -203,14 +154,14 @@ function postDatabase() {
 
             
 
-        } else if (item.textContent.includes('ASIN')) {
-            asin = item.textContent.split(':')[1].trim().replace(/\s/g, '');
+        // } else if (item.textContent.includes('ASIN')) {
+        //     asin = item.textContent.split(':')[1].trim().replace(/\s/g, '');
         } else if (item.textContent.includes('ISBN-13')) {
-            ISBN13 = item.textContent.split(':')[1].trim().replace(/\s/g, '');
+            ISBN13 = item.textContent.split(':')[1].trim().replace(/\s/g, '').replace(/^\W+|\W+$/g, '').replace('-','');
         } else if (item.textContent.includes('ISBN-10')) {
             ISBN10 = item.textContent.split(':')[1].trim().replace(/\s\s+/g, ' ').replace(/^\W+|\W+$/g, '');
-        } else if (item.textContent.includes('Language')) {
-            language = item.textContent.split(':')[1].trim().replace(/\s\s+/g, ' ').replace(/^\W+|\W+$/g, '');
+        // } else if (item.textContent.includes('Language')) {
+        //     language = item.textContent.split(':')[1].trim().replace(/\s\s+/g, ' ').replace(/^\W+|\W+$/g, '');
         } else if (item.textContent.includes('Item Weight')) {
             Weight = item.textContent.split(':')[1].trim().replace(/\s\s+/g, ' ').replace(/^\W+|\W+$/g, '');
         } else if (item.textContent.includes('Dimensions')) {
@@ -226,9 +177,20 @@ function postDatabase() {
         } 
     });
 
-    const rankMatch = rankText.match(/#(\d+,\d+|\d+) in Books/);
-    rankNumber = rankMatch ? rankMatch[1].replace(',', '') : '';
-    
+    const rankListItem = Array.from(document.querySelectorAll('#detailBullets_feature_div .a-list-item'))
+                              .find(item => item.textContent.includes('Best Sellers Rank'));
+
+    if (rankListItem) {
+        const rankText = rankListItem.innerText || rankListItem.textContent;
+        const rankMatch = rankText.match(/Best Sellers Rank:.*?(\d+,\d+|\d+)/i);
+
+        if (rankMatch && rankMatch.length > 1) {
+            rankNumber = rankMatch[1].replace(',', ''); 
+            console.log('Best Sellers Rank:', rankNumber);
+        }
+    }
+
+
     const ratingElement = document.querySelector('#averageCustomerReviews .a-icon-alt');
     if (ratingElement) {
         customerRating = ratingElement.textContent.trim().split(' ')[0]; 
@@ -254,8 +216,16 @@ function postDatabase() {
 
     var category = document.querySelector('#nav-subnav a').textContent.trim().replace(/\s\s+/g, ' ').replace(/^\W+|\W+$/g, '');
 
+    // const url = window.location.href;
+    // const match = url.match(/\/dp\/([0-9X]{10})/);
+    
+    // if (match && match[1]) {
+    //     ISBN10 = match[1];
+    // }
+
+
     return {
-        asin: asin,
+        category: ISBN13,
         title: `${document.getElementById('productTitle') ? document.getElementById('productTitle').textContent.trim() : ""}`,
         author: Author,
         publisher: publisherName,
@@ -272,7 +242,6 @@ function postDatabase() {
         customerRating:customerRating,
         numberOfReviews:numberOfReviews,
         rankNumber: rankNumber,
-        category1: category,
         lexileLevel:LexileMeasure,
         image: document.getElementById('landingImage').getAttribute('src'),
     };
@@ -280,36 +249,3 @@ function postDatabase() {
 
 
 
-
-function getASINFromUrl(url) {
-    const asinMatch = url.match(/\/dp\/([A-Z0-9]{10})/i);
-    return asinMatch ? asinMatch[1] : null;
-}
-  
-
-
-
-
-function getProductDetailsForDownload() {
-    let details = `Title: ${document.getElementById('productTitle') ? document.getElementById('productTitle').textContent.trim() : "Title not found"}\n`;
-
-    document.querySelectorAll('#detailBullets_feature_div .a-list-item, #productOverview_feature_div .a-list-item').forEach(item => {
-        const textContent = item.textContent.trim();
-        if (textContent) {
-            details += `${textContent.replace(/\s+/g, ' ')}\n`; 
-        }
-    });
-
-    const bestSellersRank = document.querySelector("#SalesRank") ? document.querySelector("#SalesRank").textContent.trim() : "";
-    if (bestSellersRank) {
-        details += `Best Sellers Rank: ${bestSellersRank.replace(/\s+/g, ' ')}\n`;
-    }
-
-    const customerReviews = document.querySelector("#acrCustomerReviewText") ? document.querySelector("#acrCustomerReviewText").textContent.trim() : "";
-    if (customerReviews) {
-        details += `Customer Reviews: ${customerReviews.replace(/\s+/g, ' ')}\n`;
-    }
-
-    return details;
-}
-  

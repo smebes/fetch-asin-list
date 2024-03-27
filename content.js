@@ -2,6 +2,17 @@ const productTitle = document.getElementById('productTitle').textContent.trim();
 chrome.runtime.sendMessage({headerTitle: productTitle});
 
 
+const url = window.location.href;
+const match = url.match(/\/dp\/([0-9X]{10})/);
+
+if (match && match[1]) {
+    console.log("ISBN10:", match[1]);
+    // Burada ISBN10'u kullanarak istediğiniz işlemi yapabilirsiniz.
+    // Örneğin, bu bilgiyi arka plan betiğine göndermek.
+    chrome.runtime.sendMessage({isbn10: match[1]});
+}
+
+
 // B00000I0IO
 // B00001IVC0
 // B00004THMC
