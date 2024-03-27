@@ -14,7 +14,7 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
         openTabIds.forEach(tabId => chrome.tabs.remove(tabId));
         openTabIds = [];
     } else if (request.action === "fetchDetails" && !isStopped) {
-        repeatCount = 0; // Döngü sayacını sıfırla
+        repeatCount = 0; 
         fetchIsbnListAndContinue();
     }
 });
@@ -24,13 +24,13 @@ function fetchIsbnListAndContinue() {
         fetch(`${flaskAppUrl}/get-isbn10-list?start=${repeatCount * maxConcurrentTabs}`)
             .then(response => response.json())
             .then(data => {
-                asinList = data; // Yeni ISBN listesi
-                if (repeatCount === 0) { // İlk döngüde sekmeleri aç
+                asinList = data; 
+                if (repeatCount === 0) { 
                     openInitialTabs();
                 } else {
-                    updateTabsWithIsbn(); // İkinci döngüden itibaren mevcut sekmeleri güncelle
+                    updateTabsWithIsbn();
                 }
-                repeatCount++; // Döngü sayacını artır
+                repeatCount++; 
             })
             .catch(error => console.error('Error fetching ISBN list:', error));
     }
