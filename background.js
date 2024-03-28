@@ -2,9 +2,9 @@
 let isStopped = false;
 let asinList = [];
 let currentProcessingTabs = {};
-let maxConcurrentTabs = 25;
+let maxConcurrentTabs = 10;
 let repeatCount = 0; 
-const repeatLimit = 10; 
+const repeatLimit = 3; 
 let lastASIN = 'B09GZJPZ6D';
 let openTabIds = []; 
 let tabStates = {}; 
@@ -19,78 +19,54 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
         openTabIds = [];
     } else if (request.action === "fetchDetails" && !isStopped) {
         repeatCount = 0;
-        asinList = generateNextASINs(lastASIN, maxConcurrentTabs);
-        openInitialTabs();
-        setTimeout(() => { 
-            updateTabsWithASINs();
-        }, 1000); 
+        fetchIsbnListAndContinue();
+        
     }
 });
 
-
-function openInitialTabs() {
-    if (openTabIds.length < maxConcurrentTabs) {
-        for (let i = 0; i < maxConcurrentTabs; i++) {
-            chrome.tabs.create({ url: 'about:blank' }, function(tab) {
-                openTabIds.push(tab.id);
-                tabStates[tab.id] = 'readyForNext'; 
-            });
-        }
-    }
-}
-
-function updateTabsWithASINs() {
-
-    if (asinList.length === 0 && repeatCount < repeatLimit) {
+function fetchIsbnListAndContinue() {
+    if (repeatCount < repeatLimit) {
         lastASIN = generateNextASINs(lastASIN, maxConcurrentTabs)[maxConcurrentTabs-1];
         asinList = generateNextASINs(lastASIN, maxConcurrentTabs);
-        repeatCount++;
+        if (repeatCount === 0) { 
+            openInitialTabs();
+        } else {
+            updateTabsWithASINs(); 
+        }
+        repeatCount++; 
+          
     }
+}
 
-    if (asinList.length > 0) {
-        let updatesCount = 0;
-        openTabIds.forEach((tabId, index) => {
-            
-            if (asinList.length > 0 ) {
-                let asin = asinList.shift();
-                chrome.tabs.update(tabId, { url: `https://www.amazon.com/dp/${asin}` }, () => {
-                    updatesCount++;
-                    tabStates[tabId] = 'loading';
-                    if (updatesCount === maxConcurrentTabs || index === openTabIds.length - 1) {
-                        if (asinList.length > 0 || repeatCount < repeatLimit) {
-                            setTimeout(updateTabsWithASINs, 3000);
-                        } else {
-                            console.log("Tüm işlemler tamamlandı.");
-                        }
-                    }
-                });
+function openInitialTabs() {
+    for (let i = 0; i < maxConcurrentTabs; i++) {
+        chrome.tabs.create({ url: 'about:blank' }, function(tab) {
+            openTabIds.push(tab.id);
+            currentProcessingTabs[tab.id] = { status: 'readyForNext' };
+            if (openTabIds.length === maxConcurrentTabs) {
+                updateTabsWithASINs();
             }
         });
-    } else {
-        console.log("İşlem limitine ulaşıldı veya daha fazla ASIN yok.");
     }
 }
 
 
-function initializeProcessing() {
-    if (repeatCount >= repeatLimit) {
-        console.log("İşlem limitine ulaşıldı.");
-        return; 
-    }
-    if (asinList.length === 0) {
-        lastASIN = generateNextASINs(lastASIN, maxConcurrentTabs)[maxConcurrentTabs-1]; 
-        asinList = generateNextASINs(lastASIN, maxConcurrentTabs);
-        repeatCount++;
-        updateTabsWithASINs(); 
-    }
-    while (Object.keys(currentProcessingTabs).length < maxConcurrentTabs && asinList.length > 0) {
-        processNextItem();
-    }
+function updateTabsWithASINs() {
+    openTabIds.forEach((tabId, index) => {
+        if (asinList.length > index) {
+            let asin = asinList[index];
+            let amazonUrl = `https://www.amazon.com/dp/${asin}`;
+            chrome.tabs.update(tabId, { url: amazonUrl }, () => {
+                currentProcessingTabs[tabId].status = 'loading';
+            });
+        }
+    });
 }
+
 
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
-    if (tabStates[tabId] === 'loading') {
-        tabStates[tabId] === 'waiting'
+    if (changeInfo.status === 'complete' && currentProcessingTabs[tabId] && currentProcessingTabs[tabId].status === 'loading') {
+        currentProcessingTabs[tabId].status = 'readyForNext';
         chrome.scripting.executeScript({
             target: {tabId: tabId},
             function: postDatabase
@@ -117,18 +93,24 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
                         headers: {
                             'Content-Type': 'application/json',
                         },
-                        body: JSON.stringify({ asin: asin })
+                        body: JSON.stringify({ asin: `${asin}` })
                     })
                     .then(response => response.json())
                     .then(data => console.log('Ürün başarıyla eklendi:', data))
                     .catch(error => console.error('Hata:', error));
                 }      
             }
-        });
-        tabStates[tabId] = 'readyForNext';
+        });    
+        let allTabsReady = openTabIds.every(id => currentProcessingTabs[id].status === 'readyForNext');
+        if (allTabsReady) {
+            if (repeatCount < repeatLimit) {
+                fetchIsbnListAndContinue();
+            } else {
+                closeAllTabs();
+            }
+        }
     }
 });
-
 
 
 function generateNextASINs(startASIN, count) {
@@ -137,7 +119,6 @@ function generateNextASINs(startASIN, count) {
         const index = order.indexOf(c);
         return index === order.length - 1 ? '0' : order[index + 1];
     }
-
     function incrementASIN(asin) {
         let asinArray = asin.split('');
         for (let i = asinArray.length - 1; i >= 0; i--) {
@@ -153,7 +134,6 @@ function generateNextASINs(startASIN, count) {
         }
         return asinArray.join('');
     }
-
     let nextASINs = [startASIN];
     for (let i = 0; i < count; i++) {
         nextASINs.push(incrementASIN(nextASINs[nextASINs.length - 1]));
@@ -161,6 +141,12 @@ function generateNextASINs(startASIN, count) {
     return nextASINs.slice(1);
 }
 
+function closeAllTabs() {
+    openTabIds.forEach(tabId => {
+        chrome.tabs.remove(tabId);
+    });
+    openTabIds = []; 
+}
 
 
 function postDatabase() {
@@ -168,7 +154,7 @@ function postDatabase() {
     let publisherInfo = '';
     let publisherName = '';
     let publishDate = '';
-    let asin = ''
+    let asin = '1'
     let ISBN13 = ''
     let ISBN10 = ''
     let language = ''
@@ -184,10 +170,13 @@ function postDatabase() {
     let numberOfReviews = 0;
     let rankText = '';
     let rankNumber = '';
+    let categoryTree = '--';
+    let categories = [];
+    let category1, category2, category3;
 
     listItems.forEach(item => {
         if (item.textContent.includes('Publisher')) {
-            publisherInfo = item.textContent.split(':')[1].trim().replace(/\s\s+/g, ' ').replace(/^\W+|\W+$/g, '');
+            publisherInfo = item.textContent.split(':')[1].trim();
             if (publisherInfo.includes(';')) {
                 const parts = publisherInfo.split(';');
                 publisherName = parts[0].trim()?parts[0].trim():'';
@@ -200,12 +189,8 @@ function postDatabase() {
                 publisherName = publisher ? publisher[0] : "";
                 publishDate = publisher ? publisher[1] .replace(")", ''): "";
             }
-
             
-
-        } else if (item.textContent.includes('ASIN')) {
-            asin = item.textContent.split(':')[1].trim().replace(/\s/g, '');
-        } else if (item.textContent.includes('ISBN-13')) {
+       } else if (item.textContent.includes('ISBN-13')) {
             ISBN13 = item.textContent.split(':')[1].trim().replace(/\s/g, '');
         } else if (item.textContent.includes('ISBN-10')) {
             ISBN10 = item.textContent.split(':')[1].trim().replace(/\s\s+/g, ' ').replace(/^\W+|\W+$/g, '');
@@ -252,7 +237,26 @@ function postDatabase() {
         Description = expanderContent.textContent.trim().replace(/^\W+|\W+$/g, '');
     }
 
-    var category = document.querySelector('#nav-subnav a').textContent.trim().replace(/\s\s+/g, ' ').replace(/^\W+|\W+$/g, '');
+    // var category = document.querySelector('#nav-subnav a').textContent.trim().replace(/\s\s+/g, ' ').replace(/^\W+|\W+$/g, '');
+
+    const categoryLinks = document.querySelectorAll("#wayfinding-breadcrumbs_feature_div .a-link-normal.a-color-tertiary");
+    categoryTree = Array.from(categoryLinks).map(link => link.textContent.trim()).join(" - ");
+
+
+    categoryLinks.forEach(link => {
+        categories.push(link.textContent.trim());
+    });
+    if (categories.length > 0) category1 = categories[0];
+    if (categories.length > 1) category2 = categories[1];
+    if (categories.length > 2) category3 = categories[2];
+
+
+    const url = window.location.href;
+    const match = url.match(/\/dp\/([A-Z0-9]{10})/);
+    
+    if (match && match[1]) {
+        asin = match[1];
+    }
 
     return {
         asin: asin,
@@ -272,44 +276,11 @@ function postDatabase() {
         customerRating:customerRating,
         numberOfReviews:numberOfReviews,
         rankNumber: rankNumber,
-        category1: category,
+        category1: category1,
+        category2: category2,
+        category3: category3,
+        categoryTree: categoryTree,
         lexileLevel:LexileMeasure,
         image: document.getElementById('landingImage').getAttribute('src'),
     };
 }
-
-
-
-
-function getASINFromUrl(url) {
-    const asinMatch = url.match(/\/dp\/([A-Z0-9]{10})/i);
-    return asinMatch ? asinMatch[1] : null;
-}
-  
-
-
-
-
-function getProductDetailsForDownload() {
-    let details = `Title: ${document.getElementById('productTitle') ? document.getElementById('productTitle').textContent.trim() : "Title not found"}\n`;
-
-    document.querySelectorAll('#detailBullets_feature_div .a-list-item, #productOverview_feature_div .a-list-item').forEach(item => {
-        const textContent = item.textContent.trim();
-        if (textContent) {
-            details += `${textContent.replace(/\s+/g, ' ')}\n`; 
-        }
-    });
-
-    const bestSellersRank = document.querySelector("#SalesRank") ? document.querySelector("#SalesRank").textContent.trim() : "";
-    if (bestSellersRank) {
-        details += `Best Sellers Rank: ${bestSellersRank.replace(/\s+/g, ' ')}\n`;
-    }
-
-    const customerReviews = document.querySelector("#acrCustomerReviewText") ? document.querySelector("#acrCustomerReviewText").textContent.trim() : "";
-    if (customerReviews) {
-        details += `Customer Reviews: ${customerReviews.replace(/\s+/g, ' ')}\n`;
-    }
-
-    return details;
-}
-  
