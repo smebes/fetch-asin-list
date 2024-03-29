@@ -5,7 +5,7 @@ let currentProcessingTabs = {};
 let maxConcurrentTabs = 10;
 let repeatCount = 0; 
 const repeatLimit = 3; 
-let lastASIN = 'B09GZJPZ6D';
+let lastASIN = '';
 let openTabIds = []; 
 let tabStates = {}; 
 
@@ -19,6 +19,8 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
         openTabIds = [];
     } else if (request.action === "fetchDetails" && !isStopped) {
         repeatCount = 0;
+        processingQueue = [...request.asinList];
+        lastASIN = request.asinList[0];
         fetchIsbnListAndContinue();
         
     }
